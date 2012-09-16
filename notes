@@ -1,0 +1,277 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# Tool for searching and manipulating "notes" stored in markdown-formatted
+# text files. See the USAGE section below for details on running this script.
+#
+# I recommend adding the following to your `.bashrc` (or equivalent):
+#
+# export NOTEDIR=$HOME/Dropbox/Notes
+# export NOTEDEST=$HOME/Sites/Notes
+#
+# alias notes-find="notes -a find"
+# alias notes-view="notes -a view"
+# alias notes-list="notes -a list"
+# alias notes-export="notes -a export"
+#
+# These alias make tab-completion a wee bit easier.
+# -----------------------------------------------------------------------------
+
+# Change these variables to suite yer fancy pants:
+
+export OPENMETA=openmeta
+export MARKDOWN=`type -p multimarkdown || type -p markdown`
+export NOTEDIR=${NOTEDIR:-$HOME/Dropbox/Notes}
+export NOTEDEST=${NOTEDEST:-$HOME/Sites/Notes}
+
+BOLD=`tput bold`
+OFFBOLD=`tput init`
+
+PRETTY=1
+
+EXTENSION_MATCHER='\.[^\.]*$'
+
+# -----------------------------------------------------------------------------
+
+USAGE="
+This script searches through text files in the folder/directory:
+    $NOTEDIR
+as if they were *notes*. This script can help you search and manipulate them.
+
+The first argument is an *action* that tells the script what to do:
+
+  * list     - Lists all of the note filenames. Useful with -t option.
+  * find     - Searches the notes that contain a particular string
+  * view     - Converts a markdown formatted note into HTML. Opens in browser.
+  * all-tags - List all of the tags used in all notes.
+  * export   - Export some notes as HTML into the directory:
+                   $NOTEDEST
+
+The command actions accept the following parameters:
+
+   -a <action> for specifying the action or command to do.
+   -n <name>   for working with files whose names match this argument
+   -t <tags>   for working with files that have all the tags given
+   -r          for raw output format (full note names and whatnot)
+   -p          for print-printing the output (trimmed filenames)
+"
+# -----------------------------------------------------------------------------
+
+if [ "-z" '<' "$1" ]    # The first argument could be the action
+then                    # unless the first argument is a dash option
+    ACTION=$1;
+    shift 1
+fi
+
+# Let's part the command-line arguments looking for options:
+#   -a <action> for specifying the action or command to do.
+#   -n <name>   for working with files that match a filename
+#   -t <tag>    for specifying a tag
+#   -r          for raw output format (full note names and whatnot)
+#   -p          for print-printing the output (trimmed filenames)
+
+while getopts "a:t:n:rp" o
+do  case "$o" in
+        a)  ACTION="$OPTARG";;
+        t)  TAGS="$OPTARG";;
+        n)  NAMES="$OPTARG";;
+        r)  RAW=1;
+            unset PRETTY;;
+        p)  PRETTY=1;
+            unset RAW;;
+      [?])  echo >&2 "Usage: $0 [-a] <action> [-r|-p] [-t <tags>] ..."
+            echo >&2 "$USAGE"
+            exit 1;;
+    esac
+done
+shift `expr $OPTIND - 1`
+
+if [ -z "$ACTION" ]     # If we still haven't been given an action,
+then                    # we assume the first string after the options
+    ACTION=$1           # is the action.
+    shift 1
+fi
+
+# -----------------------------------------------------------------------------
+# Helpful functions. Skip to the end to see us call these functions.
+# -----------------------------------------------------------------------------
+
+#
+# Passing in a filename, this will return the tags associated with it.
+# Basically a simplified wrapper around the openmeta program.
+# Call it with backticks: `getTags "$FILENAME"`
+#
+function getTags() {
+    ${OPENMETA:-openmeta} -t -p "$*" | sed 's/\/.*$//'
+}
+
+#
+# This function will search the notes directory for files that match particular
+# name patterns and return this list. This makes all of the programs behave the
+# same way.
+#
+function getAllNotes() {
+    find "$NOTEDIR" \( -iname "*$NAMES*.txt" -or -iname "*$NAMES*.markdown" -or -iname "*$NAMES*.md" \) -and \! -iname "*conflicted copy*" -and \! -iname "Interim Note-Changes*" -and \! -iname 'Notes & Settings*'
+}
+
+#
+# Similar to getAllNotes, but limits the the full names returned to those files
+# that contain all the tags specified on the command line "-t" option.
+#
+function getNotes() {
+    if [ -z "$TAGS" ]
+    then
+        getAllNotes
+    else
+        set $TAGS            # How many tags should we match?
+        NUM_TO_MATCH=$#      # This is a way to tell... I think.
+
+        getAllNotes | while read FILE
+        do
+            export MATCHES=0
+    
+            for TAG in `getTags "$FILE"`
+            do
+	        for T in $TAGS
+	        do
+	            if [ "$T" = "$TAG" ]
+	            then
+		        export MATCHES=`expr $MATCHES + 1`
+	            fi
+	        done
+            done
+
+            if [ "$MATCHES" -eq "$NUM_TO_MATCH" ]
+            then
+	        echo "$FILE"
+            fi
+        done
+    fi
+}
+
+#
+# Trims a filename to just the basename regardless of the extension that
+# may be associated with it.
+#
+function baseName() {
+    basename "$*" | sed "s/$EXTENSION_MATCHER//"
+}
+
+# -----------------------------------------------------------------------------
+
+#
+# List the filenames in the notes directory. This can be limited by
+# tags. Otherwise, we either print the full filename (in raw mode),
+# or just the names of the files (without extensions) in pretty mode.
+#
+function listFiles() {
+    if [ "$PRETTY" ]
+    then
+        getNotes | while read FILE
+        do
+            baseName "$FILE"
+        done
+    else
+        getNotes
+    fi
+}
+
+#
+# Uses egrep to look through either all files or only the files that
+# match a particular tag. In pretty mode, we display some of the
+# context.
+#
+function findFiles() {
+    export SEARCH=$*
+
+    if [ "$PRETTY" ]
+    then
+        GREP="egrep --context=1 --color=always --ignore-case --max-count=1"
+
+        getNotes | while read FILE
+        do
+            RESULTS=`$GREP "$SEARCH" "$FILE"`
+            if [ $? -eq 0 ]
+            then
+                echo $BOLD`baseName "$FILE"`$OFFBOLD
+                echo "$RESULTS" | sed 's/^/  /'
+                echo
+            fi
+        done | ${PAGER:-more -r}
+    else
+        GREP="egrep --files-with-matches --ignore-case"
+        getNotes | while read FILE
+        do
+            $GREP "$SEARCH" "$FILE"
+        done
+    fi
+}
+
+#
+# Loop over all of the matching files offering to convert and
+# display each one. Useful only if -t and -n options. ;-)
+#
+function viewFiles() {
+    SAVEIFS=$IFS
+    IFS=$(echo -en "\n\b")
+    IDX=0
+
+    for FILE in `getNotes`
+    do
+        BASE=`baseName "$*"`
+        echo -n "Found '$BASE'. Use it? [y/n] "
+        read answer
+        if [ "$answer" = "y" ]
+        then
+            OUT="/tmp/exported-note-$IDX.html"
+            $MARKDOWN --output "$OUT" "$FILE"
+            open -F "$OUT"
+            IDX=`expr $IDX + 1`
+        fi
+    done
+
+    IFS=$SAVEIFS
+}
+
+#
+# Loops through all specified files and converts them into HTML
+# using markdown. It writes them into the $DIRDEST directory.
+#
+function exportFiles() {
+    getNotes | while read FILE
+    do
+        NEW=`baseName "$FILE" | sed 's/ /-/g'`
+        OUT="$DIRDEST/$NEW.html"
+        echo "Creating $OUT"
+        $MARKDOWN --output "$OUT" "$FILE"
+    done
+}
+
+function listTags() {
+    echo "TODO: List all the tags used."
+}
+
+# -----------------------------------------------------------------------------
+# Call the function based on a command action given to us:
+
+case "$ACTION" in
+    find|grep)          # Searches the notes that contain a particular string
+        findFiles $*;;
+
+    list)               # Lists all of the notes.
+        listFiles;;
+
+    view)               # Converts a markdown formatted note into HTML.
+        viewFiles $*;;
+
+    "export")           # Export some notes as HTML into a directory.
+        exportFiles;;
+
+    all-tags)           # List all of the tags used in all notes.
+        listTags;;
+
+    *)
+        echo >&2 "No action specified."
+        echo >&2 "Usage: $0 [-a] <action> [-r|-p] [-t <tags>] ..."
+        echo >&2 "$USAGE"
+        exit 1;;
+esac
