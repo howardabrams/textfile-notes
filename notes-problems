@@ -1,0 +1,97 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# Often when dealing with the same editors working with multiple devices that
+# are not always connected to the internet, I end up with multiple versions of
+# the same file.
+#
+# This script will attempt to show you each version and let you choose the
+# "correct" version. It is interactive, so you can just run the script any
+# time.
+# -----------------------------------------------------------------------------
+
+export NOTEDIR=${NOTEDIR:-$HOME/Dropbox/Notes}
+
+export LESS="-X --QUIT-AT-EOF --quit-if-one-screen --quit-on-intr --line-numbers --raw-control-chars"
+
+SAVEIFS=$IFS
+IFS=$(echo -en "\n\b")
+
+#
+# Trims a filename to just the basename regardless of the extension that
+# may be associated with it.
+#
+function baseName() {
+    EXTENSION_MATCHER='\.[^\.]*$'
+    basename "$*" | sed "s/$EXTENSION_MATCHER//"
+}
+
+#
+# Given the original file and the conflicted version (bad) as the two parameters,
+# this function will use less and diff to show the different versions and allow
+# you to choose which to keep.
+#
+function dealWith() {
+    ORIG="$1"
+    BAD="$2"
+    BASE=`baseName $ORIG`
+
+    # If the conflicted version has a different extension (it can happen),
+    # we may not be able to find the original, so let's check for that
+    # up front, and if there is a problem, you can deal with it by hand.
+
+    if [ -f "$ORIG" -a -f "$BAD" ]
+    then
+        # If the conflicted version is really the same file, then we
+        # should be able to get rid of the "bad" version without issue.
+
+        if cmp --quiet "$ORIG" "$BAD"
+        then
+            echo "Note, '$BASE', has an identical version."
+            echo -n "Remove: $BAD [y/n] "
+            read answer
+            if [ "$answer" = "y" ]
+            then
+                rm "$BAD"
+            fi
+        else
+            diff --label "$BASE"  "$ORIG" "$BAD" | less --prompt "$BASE"
+            if [ "$ORIG" -nt "$BAD" ]
+            then
+                echo "$BASE (<) is newer"
+            else
+                echo "$BASE.1 (>) is newer"
+            fi
+            echo -n "Keep which version? [<|>] "
+            read answer
+            if [ "$answer" = "<" ]
+            then
+                echo "Removing: $BAD"
+                rm "$BAD"
+            else
+                echo "Moving: $ORIG"
+                mv "$BAD" "$ORIG"
+            fi
+        fi
+    else
+        echo "Bad note: $BAD"
+        echo "Can not find: $ORIG"
+    fi
+}
+
+#
+# Step 1. Deal with multiple versions...
+#
+for BADFILE in `find "$NOTEDIR" -name '*.[1-9].*' -and \! -iname "Interim Note-Changes*" -and \! -iname 'Notes & Settings*'`
+do
+        ORIGFILE=`echo $BADFILE | sed 's/\.[1-9]\(\.[a-z]*\)$/\1/'`
+        dealWith "$ORIGFILE" "$BADFILE" 
+done
+
+#
+# Step 2. Deal with conflicted versions... Hopefully, there is only two...
+#
+for BADFILE in `find "$NOTEDIR" -iname "*conflicted copy*" -and \! -iname "Interim Note-Changes*" -and \! -iname 'Notes & Settings*'`
+do
+        ORIGFILE=`echo $BADFILE | sed 's/ (.*conflicted copy.*)//'`
+        dealWith "$ORIGFILE" "$BADFILE" 
+done
