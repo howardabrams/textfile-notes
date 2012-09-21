@@ -5,21 +5,22 @@
 #
 # I recommend adding the following to your `.bashrc` (or equivalent):
 #
-# export NOTEDIR=$HOME/Dropbox/Notes
-# export NOTEDEST=$HOME/Sites/Notes
+#     export NOTEDIR=$HOME/Dropbox/Notes
+#     export NOTEDEST=$HOME/Sites/Notes
 #
-# alias notes-find="notes -a find"
-# alias notes-view="notes -a view"
-# alias notes-list="notes -a list"
-# alias notes-export="notes -a export"
+#     alias notes-find="notes -a find"
+#     alias notes-view="notes -a view"
+#     alias notes-list="notes -a list"
+#     alias notes-export="notes -a export"
 #
 # These alias make tab-completion a wee bit easier.
 # -----------------------------------------------------------------------------
 
 # Change these variables to suite yer fancy pants:
 
-export OPENMETA=openmeta
+export OPENMETA=${OPENMETA:-openmeta}
 export MARKDOWN=`type -p multimarkdown || type -p markdown`
+export CONFIGDIR=${CONFIGDIR:-$HOME/.notes}
 export NOTEDIR=${NOTEDIR:-$HOME/Dropbox/Notes}
 export NOTEDEST=${NOTEDEST:-$HOME/Sites/Notes}
 
@@ -51,6 +52,7 @@ The command actions accept the following parameters:
    -a <action> for specifying the action or command to do.
    -n <name>   for working with files whose names match this argument
    -t <tags>   for working with files that have all the tags given
+   -d <dir>    for specifying the export destination (overrides $NOTEDEST)
    -r          for raw output format (full note names and whatnot)
    -p          for print-printing the output (trimmed filenames)
 "
@@ -66,14 +68,16 @@ fi
 #   -a <action> for specifying the action or command to do.
 #   -n <name>   for working with files that match a filename
 #   -t <tag>    for specifying a tag
+#   -d <dest>   for overriding the NOTEDEST variable
 #   -r          for raw output format (full note names and whatnot)
 #   -p          for print-printing the output (trimmed filenames)
 
-while getopts "a:t:n:rp" o
+while getopts "a:t:n:d:rp" o
 do  case "$o" in
         a)  ACTION="$OPTARG";;
         t)  TAGS="$OPTARG";;
         n)  NAMES="$OPTARG";;
+        d)  NOTEDEST="$OPTARG";;
         r)  RAW=1;
             unset PRETTY;;
         p)  PRETTY=1;
@@ -237,12 +241,34 @@ function viewFiles() {
 # using markdown. It writes them into the $DIRDEST directory.
 #
 function exportFiles() {
+    TEMPLATE=$(cat $CONFIGDIR/template.html)
     getNotes | while read FILE
     do
-        NEW=`baseName "$FILE" | sed 's/ /-/g'`
-        OUT="$DIRDEST/$NEW.html"
+        TITLE=$(baseName $FILE)
+        NEW=$(baseName "$FILE" | sed 's/ /-/g')
+        OUT="$NOTEDEST/$NEW.html"
+        BODY=$($MARKDOWN "$FILE")
+
+        export STYLES=""
+        export SCRIPTS=""
+        for T in $(getTags "$FILE")
+        do
+            if [ -f "$NOTEDEST/css/$T.css" ]
+            then
+                STYLES="$STYLES<link type='text/css' href='css/$T.css' rel='stylesheet'/>"
+            fi
+            if [ -f "$NOTEDEST/js/$T.js" ]
+            then
+                SCRIPTS="$SCRIPTS<script type='text/javascript' href='js/$T.js'></script>"
+            fi
+        done
+
         echo "Creating $OUT"
-        $MARKDOWN --output "$OUT" "$FILE"
+
+        # Why sure we could use a fancy templating language, but that wouldn't
+        # be necessary for such a simple task as this. We'll just use perl.
+        echo $TEMPLATE \
+            | perl -p -e "s|\{\{TITLE\}\}|$TITLE|g; s|\{\{STYLES\}\}|$STYLES|g; s|\{\{SCRIPTS\}\}|$SCRIPTS|g; s|\{\{BODY\}\}|${BODY}|g"       > "$OUT"
     done
 }
 
