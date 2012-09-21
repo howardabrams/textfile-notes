@@ -33,8 +33,8 @@ Installation and Setup
 Just do the following three steps:
 
   1. Install either the [Markdown][2] or [MultiMarkdown][3] scripts
-  2. Install the [OpenMeta][4] binary files.
-  3. Place the `notes` script somewhere in your `$PATH`.
+  2. Install the [OpenMeta][4] binary file.
+  3. Place the `notes` script (and other binaries) somewhere in your `$PATH`.
 
 I recommend adding the following to your `.bashrc` (or equivalent):
 
@@ -47,6 +47,26 @@ I recommend adding the following to your `.bashrc` (or equivalent):
     alias notes-export="notes -a export"
 
 These alias make tab-completion a wee bit easier.
+
+
+OpenMeta Wrapper
+----------------
+
+I like the concept that meta data (like tags) can be stored with a file, but not
+*inside* the file. However, the interface to [OpenMeta][4] is quite crufty,
+so unless you use something like [Notational Velocity (Alt)][5] to set your
+tags, you might appreciate the [tagit][6] wrapper.
+
+To use it, simply source it into your shell, e.g.
+
+    source $HOME/.notes/notes-tag-helper
+
+This gives you the following commands:
+
+ * `tags <file>`      - Lists all the tags for a note (or other relative file)
+ * `tag-clear <file>` - Removes all tags from a note (or file)
+ * `tag-add <tag ...> <file>`   - Adds one or more tags to a note
+ * `tag-set <tag ...> <file>`   - Sets the tags to just the ones listed
 
 
 Questions
@@ -79,3 +99,5 @@ the notes.
   [2]: http://daringfireball.net/projects/markdown/
   [3]: http://fletcherpenney.net/multimarkdown/
   [4]: http://code.google.com/p/openmeta/
+  [5]: http://brettterpstra.com/project/nvalt/
+  [6]: notes-tag-helper

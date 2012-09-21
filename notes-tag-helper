@@ -1,0 +1,67 @@
+#!/bin/sh
+# -----------------------------------------------------------------------
+# This script is really something that can be sourced into your shell, e.g.
+#
+#        source $HOME/.notes/notes-tag-helper
+#
+# Which gives you a wrapper around the `openmeta` program (from Google Code)
+#      http://code.google.com/p/openmeta/
+#
+# Either have the openmeta executable on the command line, or set up the
+# OPENMETA environment variable before sourcing this file.
+# -----------------------------------------------------------------------
+
+#
+# The first argument is an "action" for the function which matches the
+# action option to openmeta, specifically:
+#
+#   -t   to list the tags
+#   -s   to set new tags
+#   -a   to add additional tags to what a file already has
+#
+# If the function fails to find a file, it does nothing, otherwise, it displays
+# the results.
+#
+function tagit() {
+    local ACTION="$1"
+    shift 1
+
+    local TAGS=""
+    for ITEM in "$*"
+    do
+        # Let's check to see if we were given the file's title, but without
+        # the .txt or .md extension, and let's determine if the file is in
+        # the current directory or in the $NOTEDIR...
+
+        if [ -f "$NOTEDIR/$ITEM.md" ]; then
+            ITEM="$NOTEDIR/$ITEM.md"
+        elif [ -f "$NOTEDIR/$ITEM.txt" ]; then
+            ITEM="$NOTEDIR/$ITEM.txt"
+        elif [ -f "$ITEM.md" ]; then
+            ITEM="`pwd`/$ITEM.md"
+        elif [ -f "$ITEM.txt" ]; then
+            ITEM="`pwd`/$ITEM.txt"
+        elif [ -f "$ITEM" ]; then
+            ITEM="`pwd`/$ITEM"
+            echo "Yippee..."
+        elif [ -f "$NOTEDIR/$ITEM" ]; then
+            ITEM="$NOTEDIR/$ITEM"
+        fi
+
+        # If we have the file, we can proceed, otherwise, we assume
+        # the "item" is actually a tag name that we can add to our list.
+
+        if [ -f "$ITEM" ]
+        then
+            ${OPENMETA:-openmeta} $ACTION $TAGS -p "$ITEM"
+        else
+            export TAGS="$TAGS $ITEM"
+        fi
+    done
+}
+
+alias tags="tagit -t"         # Lists the tag for a note
+alias tag-clear="tagit -s"    # Removes all tags from a note
+alias tag-add="tagit -a"      # Adds one or more tags
+alias tag-set="tagit -s"      # Sets the tags to just these
+
