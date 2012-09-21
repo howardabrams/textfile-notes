@@ -11,6 +11,7 @@
 #     alias notes-find="notes -a find"
 #     alias notes-view="notes -a view"
 #     alias notes-list="notes -a list"
+#     alias notes-show="notes -a find -f"
 #     alias notes-export="notes -a export"
 #
 # These alias make tab-completion a wee bit easier.
@@ -27,9 +28,13 @@ export NOTEDEST=${NOTEDEST:-$HOME/Sites/Notes}
 BOLD=`tput bold`
 OFFBOLD=`tput init`
 
-PRETTY=1
+FORMAT=s  # This can be r for "raw", s for "simple", and f for "full"
 
 EXTENSION_MATCHER='\.[^\.]*$'
+
+# SAVEIFS=$IFS
+IFS=$(echo -en "\n\b")
+
 
 # -----------------------------------------------------------------------------
 
@@ -55,6 +60,7 @@ The command actions accept the following parameters:
    -d <dir>    for specifying the export destination (overrides $NOTEDEST)
    -r          for raw output format (full note names and whatnot)
    -p          for print-printing the output (trimmed filenames)
+   -f          for displaying the entire note
 "
 # -----------------------------------------------------------------------------
 
@@ -72,16 +78,15 @@ fi
 #   -r          for raw output format (full note names and whatnot)
 #   -p          for print-printing the output (trimmed filenames)
 
-while getopts "a:t:n:d:rp" o
+while getopts "a:t:n:d:rpf" o
 do  case "$o" in
         a)  ACTION="$OPTARG";;
         t)  TAGS="$OPTARG";;
         n)  NAMES="$OPTARG";;
         d)  NOTEDEST="$OPTARG";;
-        r)  RAW=1;
-            unset PRETTY;;
-        p)  PRETTY=1;
-            unset RAW;;
+        r)  FORMAT=r;;
+        p)  FORMAT=p;;
+        f)  FORMAT=f;;
       [?])  echo >&2 "Usage: $0 [-a] <action> [-r|-p] [-t <tags>] ..."
             echo >&2 "$USAGE"
             exit 1;;
@@ -99,6 +104,7 @@ fi
 # Helpful functions. Skip to the end to see us call these functions.
 # -----------------------------------------------------------------------------
 
+
 #
 # Passing in a filename, this will return the tags associated with it.
 # Basically a simplified wrapper around the openmeta program.
@@ -114,7 +120,12 @@ function getTags() {
 # same way.
 #
 function getAllNotes() {
-    find "$NOTEDIR" \( -iname "*$NAMES*.txt" -or -iname "*$NAMES*.markdown" -or -iname "*$NAMES*.md" \) -and \! -iname "*conflicted copy*" -and \! -iname "Interim Note-Changes*" -and \! -iname 'Notes & Settings*'
+    local STAR='*'
+    if [ -z "$NAMES" ]; then
+        STAR="*$NAMES*"
+    fi
+
+    find "$NOTEDIR" \( -iname "$STAR.txt" -or -iname "$STAR.markdown" -or -iname "$STAR.md" \) -and \! -iname "*conflicted copy*" -and \! -iname "Interim Note-Changes*" -and \! -iname 'Notes & Settings*'
 }
 
 #
@@ -122,31 +133,35 @@ function getAllNotes() {
 # that contain all the tags specified on the command line "-t" option.
 #
 function getNotes() {
-    if [ -z "$TAGS" ]
+    if [ -z "$TAGS" -a -z "$NAMES" ]   # Optimization
     then
         getAllNotes
     else
-        set $TAGS            # How many tags should we match?
-        NUM_TO_MATCH=$#      # This is a way to tell... I think.
-
         getAllNotes | while read FILE
         do
-            export MATCHES=0
-    
-            for TAG in `getTags "$FILE"`
-            do
-	        for T in $TAGS
-	        do
-	            if [ "$T" = "$TAG" ]
-	            then
-		        export MATCHES=`expr $MATCHES + 1`
-	            fi
-	        done
-            done
+            local GOT_TAGS=0
+            local GOT_NAMES=0
 
-            if [ "$MATCHES" -eq "$NUM_TO_MATCH" ]
+            if [ -n "$TAGS" ]; then
+                if getTags "$FILE" | grep "$TAGS" >/dev/null
+                then
+                    GOT_TAGS=1
+                fi
+            else
+                GOT_TAGS=1
+            fi
+
+            if [ -n "$NAMES" ]; then
+                if echo "$FILE" | grep "$NAMES"; then
+                    GOT_NAMES=1
+                fi
+            else
+                GOT_NAMES=1
+            fi
+
+            if [ "$GOT_TAGS" = "1" -a "$GOT_NAMES" = "1" ]
             then
-	        echo "$FILE"
+                echo "$FILE"
             fi
         done
     fi
@@ -168,15 +183,13 @@ function baseName() {
 # or just the names of the files (without extensions) in pretty mode.
 #
 function listFiles() {
-    if [ "$PRETTY" ]
-    then
-        getNotes | while read FILE
-        do
-            baseName "$FILE"
-        done
-    else
-        getNotes
-    fi
+    case "$FORMAT" in
+        r)  getNotes;;
+        *)  for FILE in $(getNotes)
+            do
+                baseName "$FILE"
+            done
+    esac
 }
 
 #
@@ -187,27 +200,51 @@ function listFiles() {
 function findFiles() {
     export SEARCH=$*
 
-    if [ "$PRETTY" ]
-    then
-        GREP="egrep --context=1 --color=always --ignore-case --max-count=1"
-
-        getNotes | while read FILE
-        do
-            RESULTS=`$GREP "$SEARCH" "$FILE"`
-            if [ $? -eq 0 ]
-            then
-                echo $BOLD`baseName "$FILE"`$OFFBOLD
-                echo "$RESULTS" | sed 's/^/  /'
-                echo
+    case "$FORMAT" in
+        r)
+            GREP="egrep --files-with-matches --ignore-case"
+            for FILE in $(getNotes)
+            do
+                $GREP "$SEARCH" "$FILE"
+            done
+            ;;
+        s)
+            GREP="egrep --context=1 --color=always --ignore-case --max-count=1"
+            
+            for FILE in $(getNotes)
+            do
+                RESULTS=`$GREP "$SEARCH" "$FILE"`
+                if [ $? -eq 0 ]
+                then
+                    echo $BOLD`baseName "$FILE"`$OFFBOLD
+                    echo "$RESULTS" | sed 's/^/  /'
+                    echo
+                elif echo "$FILE" | grep --ignore-case "$SEARCH" >/dev/null
+                then
+                    echo $BOLD`baseName "$FILE"`$OFFBOLD
+                    echo
+                fi
+            done | ${PAGER:-less -r}
+            ;;
+        f)
+            GREP="egrep --ignore-case --files-with-matches"
+            PAGER_CMDS="-r"
+            if [ -n "$SEARCH" ]; then
+                PAGER_CMDS="-r +/$SEARCH"
             fi
-        done | ${PAGER:-more -r}
-    else
-        GREP="egrep --files-with-matches --ignore-case"
-        getNotes | while read FILE
-        do
-            $GREP "$SEARCH" "$FILE"
-        done
-    fi
+            for FILE in $(getNotes)
+            do
+                if ( $GREP "$SEARCH" "$FILE" || echo "$FILE" | grep --ignore-case "$SEARCH" ) >/dev/null 2>&1
+                then
+                    echo
+                    echo "-------------------------------------------------------------"
+                    echo $BOLD`baseName "$FILE"`$OFFBOLD
+                    echo "-------------------------------------------------------------"
+                    cat "$FILE"
+                fi
+            done | ${PAGER:-less} "$PAGER_CMDS"
+            ;;
+    esac
 }
 
 #
@@ -215,8 +252,6 @@ function findFiles() {
 # display each one. Useful only if -t and -n options. ;-)
 #
 function viewFiles() {
-    SAVEIFS=$IFS
-    IFS=$(echo -en "\n\b")
     IDX=0
 
     for FILE in `getNotes`
@@ -232,8 +267,6 @@ function viewFiles() {
             IDX=`expr $IDX + 1`
         fi
     done
-
-    IFS=$SAVEIFS
 }
 
 #
@@ -242,7 +275,7 @@ function viewFiles() {
 #
 function exportFiles() {
     TEMPLATE=$(cat $CONFIGDIR/template.html)
-    getNotes | while read FILE
+    for FILE in $(getNotes)
     do
         TITLE=$(baseName $FILE)
         NEW=$(baseName "$FILE" | sed 's/ /-/g')
