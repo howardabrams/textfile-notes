@@ -171,4 +171,4 @@ What can you expect in the next revision? Probably:
   [3]: http://fletcherpenney.net/multimarkdown/
   [4]: http://code.google.com/p/openmeta/
   [5]: http://brettterpstra.com/project/nvalt/
-  [6]: notes-tag-helper
+  [6]: master/notes-tag-helper

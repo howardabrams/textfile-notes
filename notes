@@ -32,10 +32,6 @@ FORMAT=s  # This can be r for "raw", s for "simple", and f for "full"
 
 EXTENSION_MATCHER='\.[^\.]*$'
 
-# SAVEIFS=$IFS
-IFS=$(echo -en "\n\b")
-
-
 # -----------------------------------------------------------------------------
 
 USAGE="
@@ -121,10 +117,10 @@ function getTags() {
 #
 function getAllNotes() {
     local STAR='*'
-    if [ -z "$NAMES" ]; then
+    if [ -n "$NAMES" ]; then
         STAR="*$NAMES*"
     fi
-
+set -x
     find "$NOTEDIR" \( -iname "$STAR.txt" -or -iname "$STAR.markdown" -or -iname "$STAR.md" \) -and \! -iname "*conflicted copy*" -and \! -iname "Interim Note-Changes*" -and \! -iname 'Notes & Settings*'
 }
 
@@ -185,7 +181,7 @@ function baseName() {
 function listFiles() {
     case "$FORMAT" in
         r)  getNotes;;
-        *)  for FILE in $(getNotes)
+        *)  getNotes | while read FILE
             do
                 baseName "$FILE"
             done
@@ -198,12 +194,12 @@ function listFiles() {
 # context.
 #
 function findFiles() {
-    export SEARCH=$*
+    export SEARCH="$*"
 
     case "$FORMAT" in
         r)
             GREP="egrep --files-with-matches --ignore-case"
-            for FILE in $(getNotes)
+            getNotes | while read FILE
             do
                 $GREP "$SEARCH" "$FILE"
             done
@@ -211,7 +207,7 @@ function findFiles() {
         s)
             GREP="egrep --context=1 --color=always --ignore-case --max-count=1"
             
-            for FILE in $(getNotes)
+            getNotes | while read FILE
             do
                 RESULTS=`$GREP "$SEARCH" "$FILE"`
                 if [ $? -eq 0 ]
@@ -228,11 +224,11 @@ function findFiles() {
             ;;
         f)
             GREP="egrep --ignore-case --files-with-matches"
-            PAGER_CMDS="-r"
+            PAGER_OPTS="-r"
             if [ -n "$SEARCH" ]; then
-                PAGER_CMDS="-r +/$SEARCH"
+                PAGER_OPTS="-r --pattern='$SEARCH'"
             fi
-            for FILE in $(getNotes)
+            getNotes | while read FILE
             do
                 if ( $GREP "$SEARCH" "$FILE" || echo "$FILE" | grep --ignore-case "$SEARCH" ) >/dev/null 2>&1
                 then
@@ -242,7 +238,7 @@ function findFiles() {
                     echo "-------------------------------------------------------------"
                     cat "$FILE"
                 fi
-            done | ${PAGER:-less} "$PAGER_CMDS"
+            done | ${PAGER:-less} "$PAGER_OPTS"
             ;;
     esac
 }
@@ -252,6 +248,8 @@ function findFiles() {
 # display each one. Useful only if -t and -n options. ;-)
 #
 function viewFiles() {
+    SAVEIFS=$IFS
+    IFS=$(echo -en "\n\b")
     IDX=0
 
     for FILE in `getNotes`
@@ -267,6 +265,8 @@ function viewFiles() {
             IDX=`expr $IDX + 1`
         fi
     done
+
+    IFS=$SAVEIFS
 }
 
 #
@@ -275,7 +275,7 @@ function viewFiles() {
 #
 function exportFiles() {
     TEMPLATE=$(cat $CONFIGDIR/template.html)
-    for FILE in $(getNotes)
+    getNotes | while read FILE
     do
         TITLE=$(baseName $FILE)
         NEW=$(baseName "$FILE" | sed 's/ /-/g')
@@ -314,7 +314,7 @@ function listTags() {
 
 case "$ACTION" in
     find|grep)          # Searches the notes that contain a particular string
-        findFiles $*;;
+        findFiles "$*";;
 
     list)               # Lists all of the notes.
         listFiles;;
