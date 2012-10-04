@@ -21,11 +21,14 @@
 #  -d  Specifies the main directory that will store all the subdirectories
 #  -g  The 'grouping' is the directory that stores the individual files.
 #      This defaults to "work"
-#
+#  -e  The editor to use. Defaults to the $EDITOR variable
+#  -t  A "name" to tag all the files (and symbolic links) we create
+#  -v  A *verbose* output of all the files we have ... good at first.
 # -------------------------------------------------------------------------
 
 # The openmeta, if available, tags the files on Mac OS X
 OPENMETA=`type -p ${OPENMETA:-openmeta}`
+EXTENSION=".md"
 
 # If you don't give a -g, this is the default directory where to write
 # the notes:
@@ -37,6 +40,7 @@ do
         d)  NOTEDIR="$OPTARG";;
         e)  EDITOR="$OPTARG";;
         g)  GROUP="$OPTARG";;
+        t)  TAG="$OPTARG";;
         v)  VERBOSE=1;;
         [?])    print >&2 "Usage: $0 [-d destination] [-g group_name]"
             exit 1;;
@@ -70,39 +74,39 @@ then
 fi
 
 # -----------------------
+# We need to create a unique filename with a _01 or _04
+# appended to the end of the name (but before the extension).
+
+function uniqueFilename() {
+    DIR=$1
+    FILENAME=$2
+
+    NUM=1
+    FULLNUM=01
+
+    while [ -L "${DIR}/${FILENAME}_${FULLNUM}${EXTENSION}" -o -e "${DIR}/${FILENAME}_${FULLNUM}${EXTENSION}" ]
+    do
+        NUM=`expr $NUM + 1`
+        FULLNUM=$(printf "%02d" $NUM)
+    done
+    echo "${DIR}/${FILENAME}_${FULLNUM}${EXTENSION}"
+}
+
+# -----------------------
 # Create the file. Right now, this is blank, but we could pre-populate it
 # with some sort of template....
 
+FILENAME_WORK=$(uniqueFilename "$WORK_BYID_DEST" "$CURRENT_ID")
+touch "$FILENAME_WORK"
+
+# Store the general name of this file (the label) in the ID File:
 echo -n "$CURRENT_ID" > "$CURRENT_ID_FILE"
 
 # Create a symbolic link to this new file with a filename of "today's date":
 
 TODAY=$(date '+%Y-%m-%d')
-NUM=1
-while [ -L "$WORK_DATE_DEST/${TODAY}_$NUM.md" ]
-do
-    NUM=`expr $NUM + 1`
-done
-FULLNUM=$(printf "%02d" $NUM)
-FILENAME_DATE="$WORK_DATE_DEST/${TODAY}_${FULLNUM}.md"
+FILENAME_DATE=$(uniqueFilename "$WORK_DATE_DEST" "$TODAY")
 
-# If we already have a file based on the same label that we have already
-# written stuff into, we'll create a new version of that file by incrementing
-# a version number until we have a unique file:
-
-NUM=1
-while [ -e "$WORK_BYID_DEST/${CURRENT_ID}_$NUM.md" ]
-do
-    NUM=`expr $NUM + 1`
-done
-FULLNUM=$(printf "%02d" $NUM)
-FILENAME_WORK="$WORK_BYID_DEST/${CURRENT_ID}_${FULLNUM}.md"
-
-# --------------------------------
-# Now that we have our files, let's create some symbolic links...
-
-# Link 'em together
-touch "$FILENAME_WORK"
 ln -s "$FILENAME_WORK" "$FILENAME_DATE"
 
 # Create another symbolic link based on the day of the week. This is helpful
@@ -124,6 +128,12 @@ if [ -f "$OPENMETA" ]
 then
     $OPENMETA -a $CURRENT_ID -p "$FILENAME_DATE"  >/dev/null
     $OPENMETA -a $CURRENT_ID -p "$FILENAME_WORK"  >/dev/null
+
+    if [ -n "$TAG" ]
+    then
+        $OPENMETA -a $TAG -p "$FILENAME_DATE"  >/dev/null
+        $OPENMETA -a $TAG -p "$FILENAME_WORK"  >/dev/null
+    fi
 fi
 
 # ----------------------------------
@@ -136,6 +146,9 @@ then
 fi
 
 echo -n "$FILENAME_WORK" > "$WORK_BYID_DEST/.latest"
+
+# This is only helpful at first when you are getting the feel for all
+# of the files and symbolic links this script creates.
 
 if [ -n "$VERBOSE" ]
 then
