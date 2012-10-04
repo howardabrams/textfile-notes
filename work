@@ -31,10 +31,11 @@ OPENMETA=`type -p ${OPENMETA:-openmeta}`
 # the notes:
 GROUP="work"
 
-while getopts "d:g:v" o
+while getopts "d:g:e:v" o
 do  
     case "$o" in
         d)  NOTEDIR="$OPTARG";;
+        e)  EDITOR="$OPTARG";;
         g)  GROUP="$OPTARG";;
         v)  VERBOSE=1;;
         [?])    print >&2 "Usage: $0 [-d destination] [-g group_name]"
@@ -136,9 +137,6 @@ fi
 
 echo -n "$FILENAME_WORK" > "$WORK_BYID_DEST/.latest"
 
-# Whew ... it is about time we started our editor, eh?
-${EDITOR:-aquamacs} "$FILES" "$FILENAME_WORK"
-
 if [ -n "$VERBOSE" ]
 then
     echo "$WORK_DATE_DEST :"
@@ -146,3 +144,7 @@ then
     echo "$WORK_BYID_DEST :"
     ls -l "$WORK_BYID_DEST"
 fi
+
+# Whew ... it is about time we started our editor, eh?
+exec ${EDITOR:-aquamacs} "$FILES" "$FILENAME_WORK"
+
