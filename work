@@ -1,0 +1,148 @@
+#!/bin/bash
+# -------------------------------------------------------------------------
+#  When I sit down to work, I need to remember what I did during my last
+#  session. Of course, in order to help me remember tomorrow, I need to
+#  write down what I do today.
+# 
+#  This script helps out. Simply run it via: work
+#  and enter in a label that describes the work you plan on doing. Usually
+#  some sort of bug ID or task reference (as long as it doesn't have any
+#  spaces, it should work).
+#
+#  If the work is continuing what you did yesterday (the last time you ran
+#  the script, then it will bring that information up in your editor,
+#  along with a new file.
+#
+#  Another directory with filenames of dates are symbolic links to these
+#  files. This allows you to quickly find them.
+#
+#  You don't have to run this with any parameters, but you can use:
+#
+#  -d  Specifies the main directory that will store all the subdirectories
+#  -g  The 'grouping' is the directory that stores the individual files.
+#      This defaults to "work"
+#
+# -------------------------------------------------------------------------
+
+# The openmeta, if available, tags the files on Mac OS X
+OPENMETA=`type -p ${OPENMETA:-openmeta}`
+
+# If you don't give a -g, this is the default directory where to write
+# the notes:
+GROUP="work"
+
+while getopts "d:g:v" o
+do  
+    case "$o" in
+        d)  NOTEDIR="$OPTARG";;
+        g)  GROUP="$OPTARG";;
+        v)  VERBOSE=1;;
+        [?])    print >&2 "Usage: $0 [-d destination] [-g group_name]"
+            exit 1;;
+    esac
+done
+shift $(expr $OPTIND - 1)
+
+WORK_DATE_DEST=${WORK_DATE_DEST:-$NOTEDIR/journal}
+WORK_BYID_DEST=${WORK_BYID_DEST:-$NOTEDIR/$GROUP}
+mkdir -p "$WORK_DATE_DEST"
+mkdir -p "$WORK_BYID_DEST"
+
+# Store the latest label used, so that we can have a good default:
+CURRENT_ID_FILE="${WORK_BYID_DEST}/.current_id"
+
+# Prompt for a "label" to use. This is the filename of what we'll write:
+if [ -f "$CURRENT_ID_FILE" ]
+then
+    CURRENT_ID=$(cat $CURRENT_ID_FILE)
+    echo -n "Enter new 'work' label [${CURRENT_ID}]: "
+else
+    CURRENT_ID="work"
+    echo -n "Enter new 'work' label, e.g. ORDERS-883: "
+fi
+
+read answer
+
+if [ -n "$answer" ]
+then
+    CURRENT_ID="$answer"
+fi
+
+# -----------------------
+# Create the file. Right now, this is blank, but we could pre-populate it
+# with some sort of template....
+
+echo -n "$CURRENT_ID" > "$CURRENT_ID_FILE"
+
+# Create a symbolic link to this new file with a filename of "today's date":
+
+TODAY=$(date '+%Y-%m-%d')
+NUM=1
+while [ -L "$WORK_DATE_DEST/${TODAY}_$NUM.md" ]
+do
+    NUM=`expr $NUM + 1`
+done
+FULLNUM=$(printf "%02d" $NUM)
+FILENAME_DATE="$WORK_DATE_DEST/${TODAY}_${FULLNUM}.md"
+
+# If we already have a file based on the same label that we have already
+# written stuff into, we'll create a new version of that file by incrementing
+# a version number until we have a unique file:
+
+NUM=1
+while [ -e "$WORK_BYID_DEST/${CURRENT_ID}_$NUM.md" ]
+do
+    NUM=`expr $NUM + 1`
+done
+FULLNUM=$(printf "%02d" $NUM)
+FILENAME_WORK="$WORK_BYID_DEST/${CURRENT_ID}_${FULLNUM}.md"
+
+# --------------------------------
+# Now that we have our files, let's create some symbolic links...
+
+# Link 'em together
+touch "$FILENAME_WORK"
+ln -s "$FILENAME_WORK" "$FILENAME_DATE"
+
+# Create another symbolic link based on the day of the week. This is helpful
+# for reading "what did I do last friday..."
+
+DAY=$(date +%A | tr 'A-Z' 'a-z')
+rm -f "$WORK_DATE_DEST/$DAY"
+ln -s "$FILENAME_DATE" "$WORK_DATE_DEST/$DAY"
+
+# The last entry we've created will always be readable by the "latest"
+# symbolic link...
+
+rm -f "$WORK_BYID_DEST/latest"
+ln -s "$FILENAME_WORK" "$WORK_BYID_DEST/latest"
+
+# --------------------------------
+# Tag 'em with the same ID...
+if [ -f "$OPENMETA" ]
+then
+    $OPENMETA -a $CURRENT_ID -p "$FILENAME_DATE"  >/dev/null
+    $OPENMETA -a $CURRENT_ID -p "$FILENAME_WORK"  >/dev/null
+fi
+
+# ----------------------------------
+# Now we want to edit the *last two* file entries. We know the latest
+# because we will store that filename is a file called .latest
+
+if [ -f "$WORK_BYID_DEST/.latest" ]
+then
+    FILES=$(cat "$WORK_BYID_DEST/.latest")
+fi
+
+echo -n "$FILENAME_WORK" > "$WORK_BYID_DEST/.latest"
+
+# Whew ... it is about time we started our editor, eh?
+${EDITOR:-aquamacs} "$FILES" "$FILENAME_WORK"
+
+if [ -n "$VERBOSE" ]
+then
+    echo "$WORK_DATE_DEST :"
+    ls -l "$WORK_DATE_DEST"
+    echo "$WORK_BYID_DEST :"
+    ls -l "$WORK_BYID_DEST"
+fi
