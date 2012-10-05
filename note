@@ -4,7 +4,7 @@
 #  session. Of course, in order to help me remember tomorrow, I need to
 #  write down what I do today.
 # 
-#  This script helps out. Simply run it via: work
+#  This script helps out. Simply run it via: `note`
 #  and enter in a label that describes the work you plan on doing. Usually
 #  some sort of bug ID or task reference (as long as it doesn't have any
 #  spaces, it should work).
@@ -18,6 +18,7 @@
 #
 #  You don't have to run this with any parameters, but you can use:
 #
+#  -l  The label (note name). If not given, it will prompt for it
 #  -d  Specifies the main directory that will store all the subdirectories
 #  -g  The 'grouping' is the directory that stores the individual files.
 #      This defaults to "work"
@@ -34,15 +35,16 @@ EXTENSION=".md"
 # the notes:
 GROUP="work"
 
-while getopts "d:g:e:v" o
+while getopts "l:d:g:e:v" o
 do  
     case "$o" in
+        l)  CURRENT_ID="$OPTARG";;
         d)  NOTEDIR="$OPTARG";;
         e)  EDITOR="$OPTARG";;
         g)  GROUP="$OPTARG";;
         t)  TAG="$OPTARG";;
         v)  VERBOSE=1;;
-        [?])    print >&2 "Usage: $0 [-d destination] [-g group_name]"
+        *)    echo >&2 "Usage: $0 [-l label] [-t tag] [-d destination] [-g group_name] [-e editor]"
             exit 1;;
     esac
 done
@@ -56,21 +58,24 @@ mkdir -p "$WORK_BYID_DEST"
 # Store the latest label used, so that we can have a good default:
 CURRENT_ID_FILE="${WORK_BYID_DEST}/.current_id"
 
+if [ -z "$CURRENT_ID" ]
+then
 # Prompt for a "label" to use. This is the filename of what we'll write:
-if [ -f "$CURRENT_ID_FILE" ]
-then
-    CURRENT_ID=$(cat $CURRENT_ID_FILE)
-    echo -n "Enter new 'work' label [${CURRENT_ID}]: "
-else
-    CURRENT_ID="work"
-    echo -n "Enter new 'work' label, e.g. ORDERS-883: "
-fi
+    if [ -f "$CURRENT_ID_FILE" ]
+    then
+        CURRENT_ID=$(cat $CURRENT_ID_FILE)
+        echo -n "Enter new 'work' label [${CURRENT_ID}]: "
+    else
+        CURRENT_ID="work"
+        echo -n "Enter new 'work' label, e.g. ORDERS-883: "
+    fi
 
-read answer
+    read answer
 
-if [ -n "$answer" ]
-then
-    CURRENT_ID="$answer"
+    if [ -n "$answer" ]
+    then
+        CURRENT_ID="$answer"
+    fi
 fi
 
 # -----------------------
