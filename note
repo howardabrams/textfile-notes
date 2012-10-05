@@ -35,7 +35,7 @@ EXTENSION=".md"
 # the notes:
 GROUP="work"
 
-while getopts "l:d:g:e:v" o
+while getopts "l:t:d:g:e:v" o
 do  
     case "$o" in
         l)  CURRENT_ID="$OPTARG";;
