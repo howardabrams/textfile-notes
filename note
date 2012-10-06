@@ -64,10 +64,10 @@ then
     if [ -f "$CURRENT_ID_FILE" ]
     then
         CURRENT_ID=$(cat $CURRENT_ID_FILE)
-        echo -n "Enter new 'work' label [${CURRENT_ID}]: "
+        echo -n "Enter new '$GROUP' label [${CURRENT_ID}]: "
     else
         CURRENT_ID="work"
-        echo -n "Enter new 'work' label, e.g. ORDERS-883: "
+        echo -n "Enter new '$GROUP' label, e.g. ORDERS-883: "
     fi
 
     read answer
@@ -112,20 +112,20 @@ echo -n "$CURRENT_ID" > "$CURRENT_ID_FILE"
 TODAY=$(date '+%Y-%m-%d')
 FILENAME_DATE=$(uniqueFilename "$WORK_DATE_DEST" "$TODAY")
 
-ln -s "$FILENAME_WORK" "$FILENAME_DATE"
+ln -s ../$GROUP/`basename "$FILENAME_WORK"` "$FILENAME_DATE"
 
 # Create another symbolic link based on the day of the week. This is helpful
 # for reading "what did I do last friday..."
 
 DAY=$(date +%A | tr 'A-Z' 'a-z')
 rm -f "$WORK_DATE_DEST/$DAY"
-ln -s "$FILENAME_DATE" "$WORK_DATE_DEST/$DAY"
+ln -s `basename "$FILENAME_DATE"` "$WORK_DATE_DEST/$DAY"
 
 # The last entry we've created will always be readable by the "latest"
 # symbolic link...
 
 rm -f "$WORK_BYID_DEST/latest"
-ln -s "$FILENAME_WORK" "$WORK_BYID_DEST/latest"
+ln -s `basename "$FILENAME_WORK"` "$WORK_BYID_DEST/latest"
 
 # --------------------------------
 # Tag 'em with the same ID...
