@@ -3,7 +3,7 @@
 #  When I sit down to work, I need to remember what I did during my last
 #  session. Of course, in order to help me remember tomorrow, I need to
 #  write down what I do today.
-# 
+#
 #  This script helps out. Simply run it via: `note`
 #  and enter in a label that describes the work you plan on doing. Usually
 #  some sort of bug ID or task reference (as long as it doesn't have any
@@ -24,27 +24,29 @@
 #      This defaults to "work"
 #  -e  The editor to use. Defaults to the $EDITOR variable
 #  -t  A "name" to tag all the files (and symbolic links) we create
+#  -x  Specifies the extension to use.
 #  -v  A *verbose* output of all the files we have ... good at first.
 # -------------------------------------------------------------------------
 
 # The openmeta, if available, tags the files on Mac OS X
 OPENMETA=`type -p ${OPENMETA:-openmeta}`
-EXTENSION=".md"
+EXTENSION="org"
 
 # If you don't give a -g, this is the default directory where to write
 # the notes:
 GROUP="work"
 
-while getopts "l:t:d:g:e:v" o
-do  
+while getopts "l:d:g:e:t:x:v" o
+do
     case "$o" in
         l)  CURRENT_ID="$OPTARG";;
         d)  NOTEDIR="$OPTARG";;
         e)  EDITOR="$OPTARG";;
         g)  GROUP="$OPTARG";;
         t)  TAG="$OPTARG";;
+        x)  EXTENSION="$OPTARG";;
         v)  VERBOSE=1;;
-        *)    echo >&2 "Usage: $0 [-l label] [-t tag] [-d destination] [-g group_name] [-e editor]"
+        *)  echo >&2 "Usage: $0 [-l label] [-t tag] [-x ext] [-d destination] [-g group_name] [-e editor]"
             exit 1;;
     esac
 done
@@ -89,12 +91,12 @@ function uniqueFilename() {
     NUM=1
     FULLNUM=01
 
-    while [ -L "${DIR}/${FILENAME}_${FULLNUM}${EXTENSION}" -o -e "${DIR}/${FILENAME}_${FULLNUM}${EXTENSION}" ]
+    while [ -L ${DIR}/${FILENAME}_${FULLNUM}.* -o -e ${DIR}/${FILENAME}_${FULLNUM}.* ]
     do
         NUM=`expr $NUM + 1`
         FULLNUM=$(printf "%02d" $NUM)
     done
-    echo "${DIR}/${FILENAME}_${FULLNUM}${EXTENSION}"
+    echo "${DIR}/${FILENAME}_${FULLNUM}.${EXTENSION}"
 }
 
 # -----------------------
@@ -165,4 +167,3 @@ fi
 
 # Whew ... it is about time we started our editor, eh?
 exec ${EDITOR:-aquamacs} "$FILES" "$FILENAME_WORK"
-
