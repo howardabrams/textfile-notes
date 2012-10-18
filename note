@@ -91,7 +91,8 @@ function uniqueFilename() {
     NUM=1
     FULLNUM=01
 
-    while [ -L ${DIR}/${FILENAME}_${FULLNUM}.* -o -e ${DIR}/${FILENAME}_${FULLNUM}.* ]
+    # while [ -L ${DIR}/${FILENAME}_${FULLNUM}.* -o -e ${DIR}/${FILENAME}_${FULLNUM}.* ]
+    while ls ${DIR}/${FILENAME}_${FULLNUM}.* >/dev/null 2>&1
     do
         NUM=`expr $NUM + 1`
         FULLNUM=$(printf "%02d" $NUM)
