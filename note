@@ -18,11 +18,12 @@
 #
 #  You don't have to run this with any parameters, but you can use:
 #
-#  -l  The label (note name). If not given, it will prompt for it
+#  -c  Don't create a new file, but start editing the previous file.
 #  -d  Specifies the main directory that will store all the subdirectories
+#  -e  The editor to use. Defaults to the $EDITOR variable
 #  -g  The 'grouping' is the directory that stores the individual files.
 #      This defaults to "work"
-#  -e  The editor to use. Defaults to the $EDITOR variable
+#  -l  The label (note name). If not given, it will prompt for it
 #  -t  A "name" to tag all the files (and symbolic links) we create
 #  -x  Specifies the extension to use.
 #  -v  A *verbose* output of all the files we have ... good at first.
@@ -36,13 +37,14 @@ EXTENSION="org"
 # the notes:
 GROUP="work"
 
-while getopts "l:d:g:e:t:x:v" o
+while getopts "cl:d:g:e:t:x:v" o
 do
     case "$o" in
-        l)  CURRENT_ID="$OPTARG";;
+        c)  CONTINUE="y";;
         d)  NOTEDIR="$OPTARG";;
         e)  EDITOR="$OPTARG";;
         g)  GROUP="$OPTARG";;
+        l)  CURRENT_ID="$OPTARG";;
         t)  TAG="$OPTARG";;
         x)  EXTENSION="$OPTARG";;
         v)  VERBOSE=1;;
@@ -52,6 +54,7 @@ do
 done
 shift $(expr $OPTIND - 1)
 
+NOTEDIR=${NOTEDIR:-$HOME/Dropbox/org}
 WORK_DATE_DEST=${WORK_DATE_DEST:-$NOTEDIR/journal}
 WORK_BYID_DEST=${WORK_BYID_DEST:-$NOTEDIR/$GROUP}
 mkdir -p "$WORK_DATE_DEST"
@@ -89,15 +92,22 @@ function uniqueFilename() {
     FILENAME=$2
 
     NUM=1
-    FULLNUM=01
+    FULLNUM="01"
 
-    # while [ -L ${DIR}/${FILENAME}_${FULLNUM}.* -o -e ${DIR}/${FILENAME}_${FULLNUM}.* ]
     while ls ${DIR}/${FILENAME}_${FULLNUM}.* >/dev/null 2>&1
     do
+        CONTINUED=$(ls ${DIR}/${FILENAME}_${FULLNUM}.*)
         NUM=`expr $NUM + 1`
         FULLNUM=$(printf "%02d" $NUM)
+        FULLNAME=$(printf "%s/%s_%02d.%s" $DIR $FILENAME $NUM $EXTENSION)
     done
-    echo "${DIR}/${FILENAME}_${FULLNUM}.${EXTENSION}"
+
+    if [ "$CONTINUE" == "y" -a -n "$CONTINUED" ]
+    then
+        echo "$CONTINUED"
+    else
+        echo "$FULLNAME"
+    fi
 }
 
 # -----------------------
@@ -167,4 +177,5 @@ then
 fi
 
 # Whew ... it is about time we started our editor, eh?
+echo "Edit: $FILENAME_WORK"
 exec ${EDITOR:-aquamacs} "$FILES" "$FILENAME_WORK"
