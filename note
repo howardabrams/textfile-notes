@@ -24,6 +24,7 @@
 #  -g  The 'grouping' is the directory that stores the individual files.
 #      This defaults to "work"
 #  -l  The label (note name). If not given, it will prompt for it
+#  -r  Executes a command and uses the output for the contents of the file
 #  -t  A "name" to tag all the files (and symbolic links) we create
 #  -x  Specifies the extension to use.
 #  -v  A *verbose* output of all the files we have ... good at first.
@@ -37,7 +38,7 @@ EXTENSION="org"
 # the notes:
 GROUP="work"
 
-while getopts "cl:d:g:e:t:x:v" o
+while getopts "cd:e:g:l:r:t:x:v" o
 do
     case "$o" in
         c)  CONTINUE="y";;
@@ -45,6 +46,7 @@ do
         e)  EDITOR="$OPTARG";;
         g)  GROUP="$OPTARG";;
         l)  CURRENT_ID="$OPTARG";;
+        r)  RUNTHIS="$OPTARG";;
         t)  TAG="$OPTARG";;
         x)  EXTENSION="$OPTARG";;
         v)  VERBOSE=1;;
@@ -93,6 +95,7 @@ function uniqueFilename() {
 
     NUM=1
     FULLNUM="01"
+    FULLNAME=$(printf "%s/%s_%02d.%s" $DIR $FILENAME $NUM $EXTENSION)
 
     while ls ${DIR}/${FILENAME}_${FULLNUM}.* >/dev/null 2>&1
     do
@@ -115,7 +118,18 @@ function uniqueFilename() {
 # with some sort of template....
 
 FILENAME_WORK=$(uniqueFilename "$WORK_BYID_DEST" "$CURRENT_ID")
-touch "$FILENAME_WORK"
+
+# Were we given a command to run? Let's run it. This allows us
+# to start with some sort of skeleton feature... like:
+#
+#    -r 'date'
+
+if [ -n "$RUNTHIS" ]
+then
+    sh $RUNTHIS > "$FILENAME_WORK"
+else
+    touch "$FILENAME_WORK"
+fi
 
 # Store the general name of this file (the label) in the ID File:
 echo -n "$CURRENT_ID" > "$CURRENT_ID_FILE"
@@ -132,7 +146,7 @@ ln -s ../$GROUP/`basename "$FILENAME_WORK"` "$FILENAME_DATE"
 
 DAY=$(date +%A | tr 'A-Z' 'a-z')
 rm -f "$WORK_DATE_DEST/$DAY"
-ln -s `basename "$FILENAME_DATE"` "$WORK_DATE_DEST/$DAY"
+ln -s `basename "$FILENAME_WORK"` "$WORK_DATE_DEST/$DAY"
 
 # The last entry we've created will always be readable by the "latest"
 # symbolic link...
@@ -177,5 +191,5 @@ then
 fi
 
 # Whew ... it is about time we started our editor, eh?
-echo "Edit: $FILENAME_WORK"
+echo "$FILENAME_WORK"
 exec ${EDITOR:-aquamacs} "$FILES" "$FILENAME_WORK"
